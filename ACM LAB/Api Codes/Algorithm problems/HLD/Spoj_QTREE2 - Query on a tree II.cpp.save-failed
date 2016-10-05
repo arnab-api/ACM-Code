@@ -1,0 +1,298 @@
+//#include<bits/stdc++.h>
+#include<cstdio>
+#include<cmath>
+#include<cctype>
+#include<climits>
+#include<cstring>
+#include<cstdlib>
+
+#include<algorithm>
+#include<iostream>
+#include<fstream>
+#include<sstream>
+
+#include<vector>
+#include<map>
+#include<string>
+#include<queue>
+#include<set>
+#include<iterator>
+#include<numeric>
+#include<stack>
+#include<list>
+using namespace std;
+#define M 10010
+#define lli long long int
+
+vector<int>adj[M],Costs[M],conn[M];
+
+/// LCA
+lli P[M][14],T[M],L[M],n,m;
+lli subSize[M]; /// saves the size of tree with root i
+lli otherEnd[M]; /// saves the child node of the connection(not the parent)
+void DFS(lli from,lli u,lli dep)
+{
+    T[u] = from;
+    L[u] = dep;
+    subSize[u] = 1;
+
+    for(lli i=0; i<adj[u].size(); i++)
+    {
+        lli v = adj[u][i];
+        if(v == from) continue;
+        otherEnd[conn[u][i]] = v;
+        DFS(u,v,dep+1);
+        subSize[u] += subSize[v];   /// child tree is a part of parent tree
+    }
+}
+
+/// make peerse table
+void LCA_init()
+{
+    memset(P,-1,sizeof(P));
+    lli i,j;
+    for(i=0; i<n; i++) P[i][0] = T[i];
+    for(j=1; (1<<j)<=n; j++)
+    {
+        for(i=0; i<n; i++)
+        {
+            if(P[i][j-1]!=-1) P[i][j] = P[P[i][j-1]][j-1];
+        }
+    }
+}
+
+lli LCA_query(lli x,lli y)
+{
+    lli log,i,j;
+    if(L[x]<L[y]) swap(x,y);
+    /// determine log2(L[x])
+    log = 1;
+    while(1)
+    {
+        lli next = log+1;
+        if((1 << next) > L[x]) break;
+        log++;
+    }
+    /// jump to level the level :)
+    for(i=log; i>=0; i--)
+    {
+        if(L[x] - (1<<i) >= L[y]) x = P[x][i];
+    }
+    if(x==y) return  x;
+    /// eksathe jump
+    for(i=log; i>=0; i--)
+    {
+        if(P[x][i]!=-1 && P[x][i]!=P[y][i])
+        {
+            x=P[x][i];
+            y=P[y][i];
+        }
+    }
+    return T[x];
+}
+
+/// HLD
+lli baseArr[M],chainHead[M],chainInd[M],chainNo,ptr,posInBase[M];
+void HLD(lli curNode, lli cost, lli prev)
+{
+    if(chainHead[chainNo] == -1) chainHead[chainNo] = curNode; /// Assign chain head
+    chainInd[curNode] = chainNo;
+    posInBase[curNode] = ptr; /// Position of this node in baseArr which we will use in Segment tree
+    baseArr[ptr++] = cost;  /// assign the cost needed to come to this node from its parent(only this problem)
+
+    lli sc = -1, ncost = -1;  /// sc  =  special child (child with maximum grandchild)
+    /// Loop to find special child
+    for(lli i=0; i<adj[curNode].size(); i++)  if(adj[curNode][i] != prev)
+        {
+            if(sc == -1 || subSize[sc] < subSize[adj[curNode][i]])
+            {
+                sc = adj[curNode][i];
+                ncost = Costs[curNode][i];
+            }
+        }
+
+    if(sc != -1)
+    {
+        /// Expand the chain
+        HLD(sc, ncost, curNode);
+    }
+
+    for(lli i=0; i<adj[curNode].size(); i++) if(adj[curNode][i] != prev)
+        {
+            if(sc != adj[curNode][i])
+            {
+                /// New chains at each normal node
+                chainNo++;
+                HLD(adj[curNode][i], Costs[curNode][i], curNode);
+            }
+        }
+}
+
+lli tree[4*M];
+
+void build_tree(lli node,lli b,lli e)
+{
+    if(b == e) {tree[node] = baseArr[b]; return;}
+    lli left = node*2;
+    lli right = left+1;
+    lli mid = (b+e)/2;
+    build_tree(left,b,mid);
+    build_tree(right,mid+1,e);
+    tree[node] = tree[left]+tree[right];
+}
+
+lli query_sum(lli node,lli b,lli e,lli l,lli r)
+{
+    if(l>r) swap(l,r);
+    if(r<b || l>e) return 0;
+    if(b>=l && e<=r) return tree[node];
+    lli left = node*2;
+    lli right = left+1;
+    lli mid = (b+e)/2;
+    lli p1 = query_sum(left,b,mid,l,r);
+    lli p2 = query_sum(right,mid+1,e,l,r);
+    return p1+p2;
+}
+
+lli query_up(lli u,lli v)
+{
+    if(u==v) return  0; /// obvious case!!
+    if(L[u] < L[v]) swap(u,v) ; /// v must be in upper chain
+    lli vchain = chainInd[v],uchain,ans = 0;
+    while(1){
+        lli uchain = chainInd[u];
+        if(uchain == vchain){
+            if(u==v) return ans;
+            ans += query_sum(1,1,ptr,posInBase[v]+1,posInBase[u]);
+            return ans;
+        }
+        ans += query_sum(1,1,ptr,posInBase[chainHead[uchain]],posInBase[u]);
+        u = chainHead[uchain]; /// move to chainHead
+        u = T[u]; ///shift chain
+    }
+}
+
+lli queryDist(lli u,lli v)
+{
+    lli lca = LCA_query(u,v);
+    lli p1 = query_up(u,lca);
+    lli p2 = query_up(v,lca);
+    return p1+p2;
+}
+
+lli queryKth(lli u,lli v,lli k)
+{
+    lli lca = LCA_query(u,v);
+    lli d1 = L[u] - L[lca] + 1;
+    lli d2 = L[v] - L[lca] + 1;
+    lli node = u;
+    if(k==d1) return  lca;
+    if(k>d1){
+        k = d1 + d2 - k - 1;
+        node = v;
+    }
+    //cout<<" ===> "<<node<<endl;
+    if(node==u) k--;
+    lli log = 1;
+    while(1)
+    {
+        lli next = log+1;
+        if((1 << next) > L[node]) break;
+        log++;
+    }
+    for(lli i=log; i>=0; i--)
+    {
+        if(L[node] - (1<<i) >= L[node] - k) node = P[node][i];
+    }
+    return node;
+}
+
+void init(lli N)
+{
+    for(lli i=0; i<N; i++)
+    {
+        adj[i].clear();
+        Costs[i].clear();
+        conn[i].clear();
+        T[i]=-1;
+
+        baseArr[i] = -1;
+        chainHead[i] = -1;
+        chainInd[i] = -1;
+        subSize[i] = -1;
+        otherEnd[i] = -1;
+        posInBase[i] = -1;
+    }
+    memset(tree,-1,sizeof(tree));
+    ptr = 1; /// my segment tree is 1 based
+    chainNo = 1;
+}
+
+int main()
+{
+    lli t,a,b,c,k;
+    scanf("%lld",&t);
+    char QQ[10];
+    while(t--)
+    {
+        scanf("%lld",&n);
+        init(n+5);
+        for(lli i=1; i<n; i++)
+        {
+            scanf("%lld%lld%lld",&a,&b,&c);
+            a-- ; b--;
+            adj[a].push_back(b);
+            Costs[a].push_back(c);
+            conn[a].push_back(i);
+
+            adj[b].push_back(a);
+            Costs[b].push_back(c);
+            conn[b].push_back(i);
+        }
+        //cerr<<" === X ===\n";
+        DFS(-1,0,0);
+        LCA_init();
+        HLD(0,-1,-1);
+        build_tree(1,1,ptr);
+        //cerr<<" === X ===\n";
+        while(scanf(" %s",&QQ)==1){
+            if(QQ[0] == 'D' && QQ[1] == 'O') break;
+            scanf("%lld%lld",&a,&b);
+            if(QQ[0] == 'K') {
+                scanf("%lld",&k);
+                //cerr<<"--------------> ";
+                printf("%lld\n",queryKth(a-1,b-1,k)+1);
+            }
+            else{
+                //cerr<<"--------------> ";
+                printf("%lld\n",queryDist(a-1,b-1));
+            }
+            //cout<<"--->\n";
+        }
+        //printf("\n");
+        //cerr<<"Yeyyyyy\n";
+    }
+    return 0;
+}
+
+/**
+
+10
+
+6
+1 2 1
+2 4 1
+2 5 2
+1 3 1
+3 6 2
+DIST 4 6
+KTH 4 6 4
+KTH 4 6 3
+KTH 4 6 2
+DIST 5 3
+KTH 5 3 1
+KTH 5 3 2
+KTH 5 3 3
+DONE
+
+*/

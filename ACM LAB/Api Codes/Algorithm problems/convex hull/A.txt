@@ -1,0 +1,15 @@
+Forest 1
+Cut these trees: 2 3 4
+Extra wood: 0.93
+
+Forest 2
+Cut these trees: 2
+Extra wood: 2.00
+
+Forest 3
+Cut these trees: 2
+Extra wood: 55.48
+
+Forest 4
+Cut these trees: 11
+Extra wood: 9962.40
